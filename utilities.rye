@@ -1,0 +1,6 @@
+help: join [ "This is a set of utility functions that I find useful.\n"
+    "gap: Takes an integer and prints that many blank lines. Useful for spacing between CLI input sections.\n"
+
+]
+
+gap: fn1 { :size for range 1 size { prn newline } } ; Takes an integer and prints that many blank lines. Useful for spacing between CLI input sections.

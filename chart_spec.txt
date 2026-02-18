@@ -1,0 +1,27 @@
+<!-- Prepare a DOM with a defined width and height for ECharts -->
+    <div id="main"  style="width: 800px;height:600px;" ></div>
+    <script type="text/javascript">
+      // Initialize the echarts instance based on the prepared dom
+      var myChart = echarts.init(document.getElementById('main'));
+
+      // Specify the configuration items and data for the chart
+      var titleText = 'Code Test 002';
+      var yData = ['A', 'B', 'C', 'D', 'E'];
+      var option = {
+        
+        title: {
+          text: titleText
+        },
+        tooltip: {},
+        legend: {
+          data: ['sales']
+        },
+        yAxis: {
+          data: yData
+        },
+        xAxis: {},
+        series: []
+      };
+            // Display the chart using the configuration items and data just specified.
+      myChart.setOption(option);
+    </script>

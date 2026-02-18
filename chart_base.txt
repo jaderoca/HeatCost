@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>My Test Chart</title>
+    <!-- Include the ECharts file you just downloaded -->
+    <script src="echarts.bar.min.js"></script>
+
+    <!-- The style definition for the table is pretty short, so might as well include it even if there won't be a table -->
+     <style>
+      .fixed_header {
+        width: 400px;
+        table-layout: fixed;
+        border-collapse: collapse;
+      }
+      .fixed_header tbody {
+        display: block;
+        width: 100%;
+        overflow: auto;
+        height: 200px;
+      }
+      .fixed_header thead tr {
+        display: block;
+      }
+      .fixed_header thead {
+        background: black;
+        color: #fff;
+      }
+      .fixed_header th,
+      .fixed_header td {
+        padding: 5px;
+        text-align: end;
+        width: 200px;
+      }
+      .fixed_header th:nth-child(1) { text-align: start; }
+      .fixed_header td:nth-child(1) { text-align: start; }
+
+    </style>
+  </head>
+  <body>
+
+
+  </body>
+</html>

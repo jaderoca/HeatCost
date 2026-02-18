@@ -1,0 +1,124 @@
+; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; ; This little program helps get the daily weather data from Environment Canada
+; ;
+; ; It starts by creating or refreshing the list of weather stations.
+; ; Once the list is retrieved, you will be asked for the name of a weather station
+; ; In general, that will be the name of a town.
+; ; There are over 8000 stations, past and present, so I strongly recommend typing something, otherwise you get the whole list.
+; ;
+; ; Once you've selected the station from the list, you'll be asked to provide a start year and end year.
+; ; The program will then submit the specifications to Environment Canada so they can generate the necessary file for download.
+; ; The file will be downloaded and you'll get a message telling you the name of the file and where to find it on your system.
+; ;
+; ; Note that Environment Canada's system generates separate files for each year. I combine all of the years into a single file for ease of use.
+; ;
+; ; Note that you should be able to press ESC to cancel input at any time.
+; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; loads some utilities. See file for helpful comments
+u: context Load %utilities.rye
+
+; Make sure there is actually as station list file
+; When calling out to external code, it's a good idea to at least create an anonymous context to avoid name collisions
+private { do load %get-station-list.rye }
+
+daily-source: "https://climate.weather.gc.ca/climate_data/bulk_data_e.html?format=csv&stationID=%v&Year=%d&Month=1&Day=14&timeframe=2&submit=Download+Data"
+stations-filename: %StationList.csv
+
+; filter the station list to make it easier to pick the specific station of interest
+station-name: input "Enter Station Name: "
+
+station-list: Load\csv %StationList.csv
+|autotype 0.90
+|columns? { "Name" "DLY First Year" :FirstYear "DLY Last Year" :LastYear "Station ID" :StationID }
+|where-contains 'Name to-upper station-name |order-by 'LastYear 'desc
+
+; display the filtered list for the user to choose from and retrieve the relevant data
+u/gap 3
+station-row: display station-list
+
+; No point continuing if the user didn't select a station
+if not ( station-row .type? .to-string = "tablerowtype" ) {
+    exit "\n No station selected!"
+}
+
+file-name: station-row -> "Name" |replace " " "_"
+station-id: to-string ( station-row -> "StationID" ) ; looks numeric, but only ever used as a string
+first-year: station-row -> "FirstYear"
+
+; I've seen mistakes in the Environment Canada data with years in the future.
+; That is both nonsensical and causes their system to return an error if attempting to time travel.
+; Time travel is plainly a bad idea!
+; Easy fix. Just don't allow a year greater than the current year.
+last-year: min [ ( station-row -> "LastYear" ) ( year? now ) ]
+
+; build and display a list of years for the user to choose from
+year-list:: range first-year last-year
+
+u/gap 3
+print "Select year to start:"
+first: display year-list
+
+; No point continuing if the user did not choose a year
+if not ( first .type? .to-string = "integer" ) {
+    exit "\n No year selected!"
+}
+
+u/gap 3
+print "Select year to end:"
+year-list:: range first last-year ; exclude years earlier than first-year
+last: display reverse year-list ; reverse the list to put most recent years at the top
+
+; No point continuing if the user did not choose a year
+if not ( last .type? .to-string = "integer" ) {
+    exit "\n No year selected!" 
+}
+
+; define the file name based on user selections, then go get the requested data
+station-file: to-uri file-name ++ "_" ++ first ++
+    ( either first = last { "" } { "-" ++ last } ) ++ "_Daily.csv"
+
+refresh:: true
+if station-file .Does-exist {
+     u/gap 3
+     print "The data file for this station already exists. Do you want to refresh it?"
+    refresh:: ( flui/select dict [ "No" "Do not refresh the data for this station." "Yes" "Refresh the data for this station." ] ) = "Yes"
+}
+
+if refresh {
+    ; I don't know if using files to help with processing is sensible, but it's a LOT simpler than what I was doing before.
+    u/gap 1
+    term/spin-it "Getting station data." {
+        Get to-uri [ station-id first ] .format daily-source |replace "\"" "" |Write* station-file
+        station-table:: Load\csv station-file ; mod word because it seems like the easiest way to keep the table updated
+            ; generally, if there is no temperature data then there is no other data
+            ; if there is, it's no great loss because there aren't really that many rows without temperature data
+            ; the main exception is when getting data for the current year, where everything after "today" will be completely blank
+            |where-not-equal "Min Temp (°C)" ""
+            |where-not-equal "Max Temp (°C)" ""
+        for range  inc first last {
+            ::year
+            Get to-uri [ station-id year ] .format daily-source |replace "\"" "" |Write* station-file
+            temp-table:: Load\csv station-file ; I used to use a temp file, but realized that I can just reuse the main one
+                |where-not-equal "Min Temp (°C)" ""
+                |where-not-equal "Max Temp (°C)" ""
+            station-table:: station-table .add-rows temp-table .get-rows
+        }
+
+        Save\csv station-file station-table 
+    }
+}
+u/gap 3
+print join [ os/cwd? .to-string "/" to-string station-file " is ready to use." ]
+print "Most spreadsheet and database programs have the ability to import .CSV files as tables."
+u/gap 3
+print "XLSX files are a native Excel format, but are more portable to other applications than plain XLS files."
+print "Do you want this as an XLSX file, too?"
+
+if ( flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] ) = "Yes" {
+    xlsx-file: to-uri join [ station-file .Stem? ".xlsx" ]
+    Load\csv station-file |Save\xlsx* xlsx-file
+    u/gap 1
+    print join [ os/cwd? .to-string "/" to-string xlsx-file " is ready to use." ]
+}
+u/gap 1

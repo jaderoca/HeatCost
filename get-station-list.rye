@@ -1,0 +1,50 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; This little program gets the list of weather stations from Environment Canada
+
+; The file will be downloaded and you'll get a message telling you the name of the file and where to find it on your system.
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; loads some utilities. See file for helpful comments
+u: context Load %utilities.rye
+
+stations-source: https://collaboration.cmc.ec.gc.ca/cmc/climate/Get_More_Data_Plus_de_donnees/Station%20Inventory%20EN.csv
+stations-filename: %StationList.csv
+
+; I thought about getting the list only if the user did not know the stationID for the desired weather station.
+; However, I realized that having the list made it possible to check for a valid stationID to avoid errors or blank results.
+; I was going to allow direct entry of the stationID, but I like the way this works, so I'll just stick with it.
+    
+; only get the list if we haven't got it or it needs to be refreshed.
+refresh:: true
+if stations-filename .Does-exist {
+    u/gap 1
+    print "The station list already exists. Do you want to refresh it?"
+    refresh:: ( flui/select dict [ "No" "Do not refresh the list of stations." "Yes" "Refresh the list of stations." ] ) = "Yes"
+}
+
+if refresh {
+    u/gap 1
+    term/spin-it "Loading the list of stations. " {
+
+        ; I do this convoluted process because Environment Canada's file includes notes at the top that interfere with reading the data
+        
+        ; download the list into a block with each line as a separate element
+        source: Get stations-source |split newline
+
+        ; Write the header row (writing like this will create or overwrite the file)
+            Write stations-filename ( first rest\from source 3 )
+
+        ; open the file in append mode so that further writes will add to the file instead of overwriting it
+        ; that "|defer\ 'Close" ensures that the file gets closed. I could have closed the file 'manually' at the end of function, but I like this.
+        destination: Open\append stations-filename |defer\ 'Close
+
+        for rest\from source 4 { ::row newline ++ row |Write* destination }	
+    }
+}
+
+u/gap 1
+print join [ os/cwd? .to-string "/" to-string stations-filename " is ready to use." ]
+print "Most spreadsheet and database programs have the ability to import .CSV files as tables."
+u/gap 1
+

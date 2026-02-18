@@ -1,0 +1,45 @@
+; Converts a Rye list of strings or numbers into a Javascript list. Does not handle empty lists or embedded lists or blocks.
+to-js-list: fn { l } {
+    js-list:: "["
+    join [ ( for l { ::i js-list:: join [ js-list "'" to-string i "', " ] } ) .trim\right ", " "]" ]
+}
+
+; Converts a Rye block of string or numbers into a Javascript block. Does not handle embedded lists or blocks
+to-js-block: fn { b } {
+    js-block:: "{"
+    join [ ( for b { ::i js-block:: join [ js-block "'" to-string i "', " ] } ) .trim\right ", " "}" ]
+}
+
+; Converts a string or number to a Javascript value 
+to-js-value: fn { v } {
+    join [ "'" to-string v "'" ]
+}
+
+; Converts a list of script locations (as strings) to a set of html script blocks
+to-html-script-block: fn { s } {
+    script-block:: ""
+    for s { ::i script-block:: join [ script-block "<script src=\"" i "\"></script>\n" ] }
+}
+
+html-head: fn { title script-block } {
+    head:: ""
+}
+
+
+
+
+my-list: [ "a" ]
+print my-list
+print to-js-list my-list
+
+my-block: { "a" "b" "c" "d" }
+print my-block
+print to-js-block my-block
+
+my-value: 4
+print my-value
+print to-js-value my-value
+
+my-script: [ "echarts.bar.min.js" "echarts.bar.min.js" ]
+print my-script
+print to-html-script-block my-script

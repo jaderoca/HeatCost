@@ -1,0 +1,151 @@
+; Rye version 0.0.
+
+; Just a quick not on progress indicators:
+; Everything that takes time is found in the sub-programs I Load
+; Other that utilities.rye, those sub-programs can also be run as stand-alone programs
+; So, they have all the responsibility for managing expectations.
+
+u: context Load %utilities.rye
+
+
+; List the available sets of data and load the one selected
+; Start by checking to see if there are any data sets at all
+file-picker:: ""
+if ( to-string os/ls\ "_Daily.csv" ) = "" {
+    file-picker:: "New!"
+}
+
+until { not file-picker = "New!" } {
+    if file-picker = "New!" { private { do Load %get-station-data.rye } } ; the anonymous context is to avoid name collisions
+    u/gap 3
+    print "Choose which file to analyze:"
+    file-picker:: display split trim join [ "New! " to-string os/ls\ "_Daily.csv" ] " "    
+}
+
+; I need to tinker with columns and their values, so load as ref
+t: to-uri file-picker |Load\csv .ref
+
+
+; I have to do a bunch of work with the data to set up for the next set of questions
+
+
+; coerce temperature data to decimal so we can perform calculations with it
+; why not just use autotype? Because autotype turns 0-padded numbers into integers, screwing up order-by
+t .update-column! "Min Temp (°C)" fn { c r } { c .to-string .to-decimal }
+t .update-column! "Max Temp (°C)" fn { c r } { c .to-decimal }
+t .update-column! "Mean Temp (°C)" fn { c r } { c .to-decimal }
+t .update-column! "Year" fn { c r } { c .to-integer }
+
+
+; turn the data into something I can use to create the chart title
+; the group-by clause will return just a single row, because the data only contains a single name
+; this also makes it easier to ask the user which year they want to analyze
+; t-data: t .deref columns? { "Station Name" :Name "Year"}
+title-data: t .deref |group-by { "Station Name" } { 'Year min 'Year max }
+title-name: ( title-data .column? "Station Name" ) .to-string .capitalize .replace " " ""  ; column? adds a space to the end of the data
+year-min:: ( title-data .column? 'Year_min ) .to-string .split "." |first ; column? shows the number as a decimal value
+year-max:: ( title-data .column? 'Year_max ) .to-string .split "." |first ; so I split it out. I don't know why to-integer didn't work
+
+; okay, things are ready to go!
+u/gap 3
+print "Choose how you want the data grouped:"
+group: display { "Year" "Month" }
+
+u/gap 3
+filter: either group = "Month" {
+     display split join [ "All " to-string range year-min .to-integer year-max .to-integer ] " "
+}
+{
+    "All"
+}
+
+; create the chart title
+title: join [
+    title-name ": "
+    ; include either the start-end years or just the selected year
+    ( either filter = "All" { join [ year-min "-" year-max ] } { filter } )
+    ; "       007"   ; not every change is visible, so I update this while testing. I'll get rid of it when I'm finished
+]
+
+
+; a few parameters that will eventually be stored in and retrieved from a file
+pivot: -5.0 ; this is the temperature at which we switch from one heating method to the other
+threshold: 5.0 ; we don't need any heat as long until the daily average temperature falls below this value
+
+; using deref for all the usual operations is a pain, so I create a second "normal" table from the original
+; might as well simplify the column names and filter the data while we're at it
+; I tried to use an either statement for the where-equal clause and couldn't get it to work, so just hacked this together
+data: either filter = "All" { t .deref
+    |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
+    |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
+    |gen-column 'HeatPumpDay { MinTemp } { :v either v >= pivot { "1" .to-integer } { "0" .to-integer } }
+    |gen-column 'OtherHeatDay { MinTemp } { :v either v < pivot { "1" .to-integer } { "0" .to-integer } }
+    |where-lesser 'MeanTemp threshold
+}
+{ t .deref
+    |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
+    |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
+    |gen-column 'HeatPumpDay { MinTemp } { :v either v >= pivot { "1" .to-integer } { "0" .to-integer } }
+    |gen-column 'OtherHeatDay { MinTemp } { :v either v < pivot { "1" .to-integer } { "0" .to-integer } }
+    |where-lesser 'MeanTemp threshold
+    |where-equal 'Year to-integer filter 
+}
+
+; This might look a bit odd, but it saved me a bunch of hassle getting the different grouping options to work
+table-data: do load join [ "data |group-by { '" group " } { 'HeatPumpDay sum  'OtherHeatDay sum }
+    |order-by '" group " 'asc" ]
+
+; I want a horizontal bar chart, which the built-in echarts context doesn't support
+; so I'm doing it from scratch using Apache's echart.js system. More specifically,
+; I downloaded a custom version of their full program that has just the bar chart module
+; when doing horizontal bar-charts, the y-axis order is technically correct because it starts with the first element at 0-position
+; but that doesn't match the visual ordering of the table, so I reverse it.
+chart-data: do load join [ "table-data |order-by '" group " 'desc" ]
+
+; I don't know whether loading all library code at the top is better than loading it on first use,
+; but you can see what choice I made.
+chart: context Load %chart.rye  ; my little library of helper functions for charting
+chart-base: chart/base-text %chart_base.txt |replace "<title>My Test Chart</title>" join [ "<title>" title "</title>" ] ; the main html code
+chart-spec:: chart/spec-text %chart_spec.txt ; the html section that will eventually become a chart with table
+
+chart-spec:: chart/title-text chart-spec title
+chart-spec:: chart/y-axis-text chart-spec ( chart-data .column? group ) ; the parens aren't required, but I find it easier to read
+
+; I may eventually figure out how to generalize this, but just sticking with what I know I need for my own purposes works for now
+heat-pump-data:: join [ "{ name: 'Heat Pump Days', type: 'bar', stack: 'x'," newline "data: [" ]
+for chart-data .column? "HeatPumpDay_sum" { ::c heat-pump-data:: join [ heat-pump-data  ( c .to-string |split "." |first ) ", " ] }
+heat-pump-data:: join [ heat-pump-data "]" newline "}," ]
+
+other-heat-data:: join [ "{ name: 'Other Heat Days', type: 'bar', stack: 'x'," newline "data: [" ]
+for chart-data .column? "OtherHeatDay_sum" { ::c other-heat-data:: join [ other-heat-data  ( c .to-string |split "." |first ) ", " ] }
+other-heat-data:: join [ other-heat-data "]" newline "}," ]
+
+; this finishes the chart section of the web page I'm building
+x-series: join [ heat-pump-data newline other-heat-data ]
+chart-spec:: chart/x-axis-data chart-spec join [ heat-pump-data newline other-heat-data ]
+
+; Now I need to build the table section, starting with the table's header row
+; I'm looking at this and cringing. surely there is a better way, but I've got it working, so I'm leaving it for now.
+table-head: table to-block header? table-data to-block header? table-data |htmlize 
+    |replace "{" "" |replace "}" "" |replace "_sum" "s"
+    |replace "<table>" "<thead>" |replace "</table>" join [ "</thead>" newline "<tbody>" ]
+    |replace "td>" "th>"
+
+; and finishing up with final assembly of the table data with header row
+table-body: ( htmlize table-data |replace "{" "" |replace "}" "" )
+    |replace "<table>" join [ "<table class=\"fixed_header\">" table-head ]
+    |replace "</table>" join [ "</tbody>" newline "</table>" newline  ]
+
+; this adds the table to render after the chart. It's completely optional, but I like it.
+chart-spec:: chart/insert-table chart-spec table-body
+
+; build the file name based on the chart title, write it out, and open it
+chart-file:: to-uri join [ title .replace ": " "_" "_by" group ".html" ]
+Write chart-file chart/chart-html chart-base chart-spec
+chart-file:: to-uri join [ os/cwd? .to-string "/" to-string chart-file ]
+cmd { open ?chart-file } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
+
+; remind the user that a file has been created and where to find it.
+u/gap 3
+print join [ to-string chart-file " is ready to view!" ]
+u/gap 3

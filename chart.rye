@@ -1,0 +1,22 @@
+base-text: fn1 { .Read }
+spec-text: fn1 { .Read }
+
+title-text: fn { spec title } {
+    replace spec "var titleText = 'Code Test 002';" join [ "var titleText = '" title "';" ]
+}
+
+y-axis-text: fn { spec y-text } {
+    replace spec "var yData = ['A', 'B', 'C', 'D', 'E'];" join [ "var yData = [" ( y-text .to-string .replace " " ", " ) "];" ]
+}
+
+x-axis-data: fn { spec x-data } {
+    replace spec "series: []" join [ "series: [ "
+        newline x-data " ]" newline ]
+}
+
+; Adds an html table below the chart
+insert-table: fn { spec t } {
+    join [ spec newline t ]
+}
+
+chart-html: fn { base spec } { replace base "<body>" join [ "<body>" newline spec ] }
