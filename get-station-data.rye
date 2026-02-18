@@ -31,7 +31,7 @@ station-name: input "Enter Station Name: "
 station-list: Load\csv %StationList.csv
 |autotype 0.90
 |columns? { "Name" "DLY First Year" :FirstYear "DLY Last Year" :LastYear "Station ID" :StationID }
-|where-contains 'Name to-upper station-name |order-by 'LastYear 'desc
+|where-contains 'Name upper station-name |order-by 'LastYear 'desc
 
 ; display the filtered list for the user to choose from and retrieve the relevant data
 u/gap 3
