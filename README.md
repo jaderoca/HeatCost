@@ -1,4 +1,4 @@
-This is where I tinker with Rye (https://ryelang.org)
+(I moved development out of my "Rye" repository because the whole system looked like it might have actual uses beyond tinkering.)
 
 Another almost complete rewrite! (Tested on Linux (Ubuntu 20.04) with Rye version 0.0.99)
 
