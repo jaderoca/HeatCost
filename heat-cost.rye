@@ -14,9 +14,9 @@ work-dir: os/cwd?   ; I need the working directory in a few different places
 config-file: %heat-source.cfg
 if not ( config-file .Does-exist ) {
     config-file |Write join [ "Heat Source,Daily Cost,Min Effective Temp (°C)" newline
-        "Heat Pump,2.00,-5" newline
+        "No Heat,0.00,10" newline
         "Pellet Stove,9.00,-50" newline
-        "No Heat,0.00,10"
+        "Heat Pump,2.00,-5"
     ]
 
     u/gap 3
@@ -32,27 +32,35 @@ if not ( config-file .Does-exist ) {
 
 config-table: Load\csv config-file |autotype 0.99 |order-by "Min Effective Temp (°C)" 'desc
 
+if not ( config-table .length? = 3 ) {
+    u/gap 1
+    print join [ "Invalid configuration file! There must be exactly 3 rows." newline
+        "One row for the No Heat Required condition that shows a 0.00 operating cost and the daily average temperature at which you no longer require heat." newline
+        "One row for the Primary Heat method that can be used regardless of outdoor temperatures. This should have a non-zero operating cost and a very low temperature." newline
+        "One row for the Alternate Heat Method that has outdoor temperature limitations, but is less expensive to operate than the Primary Method." newline
+        "     The Alternate Method could have a 0.00 cost (like solar?), but should reflect reality." newline
+        "     The Alternate Method must have a temperature higher than that of the Primary Method for the program to perform it's analysis."
+    ]
+    exit "Invalid config!"
+}
+
 ; the first row of the sorted config file is for when no heat is required
 nth config-table 1 |nth 3 :threshold ; we don't need any heat until the daily average temperature falls below this value
 
 ; the second row of the sorted config file is for the alternate heat source
 ; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature, hence "pivot"
 nth config-table 2 |to-block |match-block { alt-title alt-cost pivot }
+alt-column: alt-title .replace " " "" ; this will be a column name and column names with spaces are a pain
 
 ; the third row of the sorted config file is for the primary heat source
 ; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature
 ; we don't actually need the primary heat's minimum effective temperature, but "match-block" is so elegant!
 nth config-table 3 |to-block |match-block { primary-title primary-cost primary-min-temp }
-print primary-title
-print primary-cost
-print primary-min-temp
+primary-column: primary-title .replace " " "" ; this will be a column name and column names with spaces are a pain
 
-
-; display config-table
-
-exit "break"
-
-
+; we need a title and column for the column that will show us the cost without the alternate heat source
+primary-only-title: primary-title ++ " Only"
+primary-only-column: primary-only-title .replace " " ""
 
 ; List the available sets of data and load the one selected
 ; Start by checking to see if there are any data sets at all
@@ -74,9 +82,8 @@ t: to-uri file-picker |Load\csv .ref
 
 ; I have to do a bunch of work with the data to set up for the next set of questions
 
-
 ; coerce temperature data to decimal so we can perform calculations with it
-; why not just use autotype? Because autotype turns 0-padded numbers into integers, screwing up order-by
+; why not just use autotype? Because autotype turns 0-padded numbers into integers, screwing up order-by for months and days
 t .update-column! "Min Temp (°C)" fn { c r } { c .to-string .to-decimal }
 t .update-column! "Max Temp (°C)" fn { c r } { c .to-decimal }
 t .update-column! "Mean Temp (°C)" fn { c r } { c .to-decimal }
@@ -119,22 +126,31 @@ title: join [
 data: either filter = "All" { t .deref
     |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
     |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
-    |gen-column 'HeatPumpDay { MinTemp } { :v either v >= pivot { "1" .to-integer } { "0" .to-integer } }
-    |gen-column 'OtherHeatDay { MinTemp } { :v either v < pivot { "1" .to-integer } { "0" .to-integer } }
+    |gen-column to-word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .to-decimal } }
+    |gen-column to-word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .to-decimal } }
+    |gen-column to-word primary-only-column { } { primary-cost }
     |where-lesser 'MeanTemp threshold
 }
 { t .deref
     |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
     |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
-    |gen-column 'HeatPumpDay { MinTemp } { :v either v >= pivot { "1" .to-integer } { "0" .to-integer } }
-    |gen-column 'OtherHeatDay { MinTemp } { :v either v < pivot { "1" .to-integer } { "0" .to-integer } }
+    |gen-column to-word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .to-decimal } }
+    |gen-column to-word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .to-decimal } }
+    |gen-column to-word primary-only-column { } { primary-cost }
     |where-lesser 'MeanTemp threshold
-    |where-equal 'Year to-integer filter 
+    |where-equal 'Year to-integer filter
 }
 
+
+
+
 ; This might look a bit odd, but it saved me a bunch of hassle getting the different grouping options to work
-table-data: do load join [ "data |group-by { '" group " } { 'HeatPumpDay sum  'OtherHeatDay sum }
+; table-data: do load join [ "data |group-by { '" group " } { 'HeatPumpDay sum  'OtherHeatDay sum }
+;     |order-by '" group " 'asc" ]
+
+table-data: do load join [ "data |group-by { '" group " } { '" alt-column " sum  '" primary-column " sum '" primary-only-column " sum }
     |order-by '" group " 'asc" ]
+
 
 ; I want a horizontal bar chart, which the built-in echarts context doesn't support
 ; so I'm doing it from scratch using Apache's echart.js system. More specifically,
@@ -142,6 +158,8 @@ table-data: do load join [ "data |group-by { '" group " } { 'HeatPumpDay sum  'O
 ; when doing horizontal bar-charts, the y-axis order is technically correct because it starts with the first element at 0-position
 ; but that doesn't match the visual ordering of the table, so I reverse it.
 chart-data: do load join [ "table-data |order-by '" group " 'desc" ]
+
+display chart-data
 
 ; I don't know whether loading all library code at the top is better than loading it on first use,
 ; but you can see what choice I made.
@@ -153,17 +171,34 @@ chart-spec:: chart/title-text chart-spec title
 chart-spec:: chart/y-axis-text chart-spec ( chart-data .column? group ) ; the parens aren't required, but I find it easier to read
 
 ; I may eventually figure out how to generalize this, but just sticking with what I know I need for my own purposes works for now
-heat-pump-data:: join [ "{ name: 'Heat Pump Days', type: 'bar', stack: 'x'," newline "data: [" ]
-for chart-data .column? "HeatPumpDay_sum" { ::c heat-pump-data:: join [ heat-pump-data  ( c .to-string |split "." |first ) ", " ] }
-heat-pump-data:: join [ heat-pump-data "]" newline "}," ]
+alt-data:: join [ "{ name: '" alt-title " Cost', type: 'bar', stack: 'x'," newline "data: [" ]
+for chart-data .column? join [ alt-column "_sum" ] { ::c alt-data:: join [ alt-data  ( c .to-string |split "." |first ) ", " ] }
+alt-data:: join [ alt-data "]" newline "}," ]
 
-other-heat-data:: join [ "{ name: 'Other Heat Days', type: 'bar', stack: 'x'," newline "data: [" ]
-for chart-data .column? "OtherHeatDay_sum" { ::c other-heat-data:: join [ other-heat-data  ( c .to-string |split "." |first ) ", " ] }
-other-heat-data:: join [ other-heat-data "]" newline "}," ]
+u/gap 3
+print alt-data
+
+
+primary-data:: join [ "{ name: '" primary-title " Cost', type: 'bar', stack: 'x'," newline "data: [" ]
+for chart-data .column? join [ primary-column "_sum" ] { ::c primary-data:: join [ primary-data  ( c .to-string |split "." |first ) ", " ] }
+primary-data:: join [ primary-data "]" newline "}," ]
+
+u/gap 3
+print primary-data
+
+; the charting software allows for stacked and unstacked bars on the same chart
+; that's a nice way to show the comparison of mixed heat sources to a single heat source
+primary-only-data:: join [ "{ name: '" primary-only-title " Cost', type: 'bar'," newline "data: [" ]
+for chart-data .column? join [ primary-only-column "_sum" ] { ::c primary-only-data:: join [ primary-only-data  ( c .to-string |split "." |first ) ", " ] }
+primary-only-data:: join [ primary-only-data "]" newline "}," ]
+
+u/gap 3
+print primary-only-data
+
 
 ; this finishes the chart section of the web page I'm building
-x-series: join [ heat-pump-data newline other-heat-data ]
-chart-spec:: chart/x-axis-data chart-spec join [ heat-pump-data newline other-heat-data ]
+x-series: join [ alt-data newline primary-data newline primary-only-data ]
+chart-spec:: chart/x-axis-data chart-spec join [ alt-data newline primary-data newline primary-only-data ]
 
 ; Now I need to build the table section, starting with the table's header row
 ; I'm looking at this and cringing. surely there is a better way, but I've got it working, so I'm leaving it for now.
