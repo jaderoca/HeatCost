@@ -1,11 +1,57 @@
 ; Rye version 0.0.
 
-; Just a quick not on progress indicators:
+; Just a quick note on progress indicators:
 ; Everything that takes time is found in the sub-programs I Load
 ; Other that utilities.rye, those sub-programs can also be run as stand-alone programs
 ; So, they have all the responsibility for managing expectations.
 
 u: context Load %utilities.rye
+
+work-dir: os/cwd?   ; I need the working directory in a few different places
+
+; Start by checking for the existence of heat-source.cfg
+; If not, create a sample from scratch
+config-file: %heat-source.cfg
+if not ( config-file .Does-exist ) {
+    config-file |Write join [ "Heat Source,Daily Cost,Min Effective Temp (°C)" newline
+        "Heat Pump,2.00,-5" newline
+        "Pellet Stove,9.00,-50" newline
+        "No Heat,0.00,10"
+    ]
+
+    u/gap 3
+    print join [ "Created sample configuration file." newline 
+        "Edit " work-dir "/" config-file " to set your own heat source characteristics." ]
+    if ( flui/select dict [ "Continue" "Use the sample configuration." "Edit" "Make my own configuration." ] ) = "Edit" {
+        u/gap 1
+        cmd { open ?work-dir } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.        
+        exit "Restart the program after saving your changes."
+    }
+
+}
+
+config-table: Load\csv config-file |autotype 0.99 |order-by "Min Effective Temp (°C)" 'desc
+
+; the first row of the sorted config file is for when no heat is required
+nth config-table 1 |nth 3 :threshold ; we don't need any heat until the daily average temperature falls below this value
+
+; the second row of the sorted config file is for the alternate heat source
+; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature, hence "pivot"
+nth config-table 2 |to-block |match-block { alt-title alt-cost pivot }
+
+; the third row of the sorted config file is for the primary heat source
+; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature
+; we don't actually need the primary heat's minimum effective temperature, but "match-block" is so elegant!
+nth config-table 3 |to-block |match-block { primary-title primary-cost primary-min-temp }
+print primary-title
+print primary-cost
+print primary-min-temp
+
+
+; display config-table
+
+exit "break"
+
 
 
 ; List the available sets of data and load the one selected
@@ -66,11 +112,6 @@ title: join [
     ( either filter = "All" { join [ year-min "-" year-max ] } { filter } )
     ; "       007"   ; not every change is visible, so I update this while testing. I'll get rid of it when I'm finished
 ]
-
-
-; a few parameters that will eventually be stored in and retrieved from a file
-pivot: -5.0 ; this is the temperature at which we switch from one heating method to the other
-threshold: 5.0 ; we don't need any heat as long until the daily average temperature falls below this value
 
 ; using deref for all the usual operations is a pain, so I create a second "normal" table from the original
 ; might as well simplify the column names and filter the data while we're at it
@@ -142,7 +183,7 @@ chart-spec:: chart/insert-table chart-spec table-body
 ; build the file name based on the chart title, write it out, and open it
 chart-file:: to-uri join [ title .replace ": " "_" "_by" group ".html" ]
 Write chart-file chart/chart-html chart-base chart-spec
-chart-file:: to-uri join [ os/cwd? .to-string "/" to-string chart-file ]
+chart-file:: to-uri join [ work-dir .to-string "/" to-string chart-file ]
 cmd { open ?chart-file } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
 
 ; remind the user that a file has been created and where to find it.
