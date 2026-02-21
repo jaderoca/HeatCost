@@ -159,8 +159,6 @@ table-data: do load join [ "data |group-by { '" group " } { '" alt-column " sum 
 ; but that doesn't match the visual ordering of the table, so I reverse it.
 chart-data: do load join [ "table-data |order-by '" group " 'desc" ]
 
-display chart-data
-
 ; I don't know whether loading all library code at the top is better than loading it on first use,
 ; but you can see what choice I made.
 chart: context Load %chart.rye  ; my little library of helper functions for charting
@@ -175,26 +173,15 @@ alt-data:: join [ "{ name: '" alt-title " Cost', type: 'bar', stack: 'x'," newli
 for chart-data .column? join [ alt-column "_sum" ] { ::c alt-data:: join [ alt-data  ( c .to-string |split "." |first ) ", " ] }
 alt-data:: join [ alt-data "]" newline "}," ]
 
-u/gap 3
-print alt-data
-
-
 primary-data:: join [ "{ name: '" primary-title " Cost', type: 'bar', stack: 'x'," newline "data: [" ]
 for chart-data .column? join [ primary-column "_sum" ] { ::c primary-data:: join [ primary-data  ( c .to-string |split "." |first ) ", " ] }
 primary-data:: join [ primary-data "]" newline "}," ]
-
-u/gap 3
-print primary-data
 
 ; the charting software allows for stacked and unstacked bars on the same chart
 ; that's a nice way to show the comparison of mixed heat sources to a single heat source
 primary-only-data:: join [ "{ name: '" primary-only-title " Cost', type: 'bar'," newline "data: [" ]
 for chart-data .column? join [ primary-only-column "_sum" ] { ::c primary-only-data:: join [ primary-only-data  ( c .to-string |split "." |first ) ", " ] }
 primary-only-data:: join [ primary-only-data "]" newline "}," ]
-
-u/gap 3
-print primary-only-data
-
 
 ; this finishes the chart section of the web page I'm building
 x-series: join [ alt-data newline primary-data newline primary-only-data ]
@@ -203,16 +190,20 @@ chart-spec:: chart/x-axis-data chart-spec join [ alt-data newline primary-data n
 ; Now I need to build the table section, starting with the table's header row
 ; I'm looking at this and cringing. surely there is a better way, but I've got it working, so I'm leaving it for now.
 table-head: table to-block header? table-data to-block header? table-data |htmlize 
-    |replace "{" "" |replace "}" "" |replace "_sum" "s"
+    |replace "{" "" |replace "}" ""
+    |replace alt-column ++ "_sum" alt-title
+    |replace primary-column ++ "_sum" primary-title
+    |replace primary-only-column ++ "_sum" primary-only-title
     |replace "<table>" "<thead>" |replace "</table>" join [ "</thead>" newline "<tbody>" ]
     |replace "td>" "th>"
+
 
 ; and finishing up with final assembly of the table data with header row
 table-body: ( htmlize table-data |replace "{" "" |replace "}" "" )
     |replace "<table>" join [ "<table class=\"fixed_header\">" table-head ]
     |replace "</table>" join [ "</tbody>" newline "</table>" newline  ]
 
-; this adds the table to render after the chart. It's completely optional, but I like it.
+; this adds the table to render after the chart.
 chart-spec:: chart/insert-table chart-spec table-body
 
 ; build the file name based on the chart title, write it out, and open it

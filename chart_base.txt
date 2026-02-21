@@ -9,7 +9,7 @@
     <!-- The style definition for the table is pretty short, so might as well include it even if there won't be a table -->
      <style>
       .fixed_header {
-        width: 400px;
+        width: 800px;
         table-layout: fixed;
         border-collapse: collapse;
       }
@@ -30,7 +30,7 @@
       .fixed_header td {
         padding: 5px;
         text-align: end;
-        width: 200px;
+        width: 800px;
       }
       .fixed_header th:nth-child(1) { text-align: start; }
       .fixed_header td:nth-child(1) { text-align: start; }
