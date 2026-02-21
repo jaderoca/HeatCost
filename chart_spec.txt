@@ -8,18 +8,25 @@
       var titleText = 'Code Test 002';
       var yData = ['A', 'B', 'C', 'D', 'E'];
       var option = {
-        
         title: {
           text: titleText
         },
+
         tooltip: {},
+
         legend: {
-          data: ['sales']
+          // Try 'vertical'
+          // orient: 'horizontal',
+          // right: 10,
+          // top: 'center'
         },
+
         yAxis: {
           data: yData
         },
+
         xAxis: {},
+        
         series: []
       };
             // Display the chart using the configuration items and data just specified.

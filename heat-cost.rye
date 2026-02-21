@@ -15,7 +15,7 @@ config-file: %heat-source.cfg
 if not ( config-file .Does-exist ) {
     config-file |Write join [ "Heat Source,Daily Cost,Min Effective Temp (°C)" newline
         "No Heat,0.00,10" newline
-        "Pellet Stove,9.00,-50" newline
+        "Pellet Stove,7.00,-50" newline
         "Heat Pump,2.00,-5"
     ]
 
@@ -95,7 +95,7 @@ t .update-column! "Year" fn { c r } { c .to-integer }
 ; this also makes it easier to ask the user which year they want to analyze
 ; t-data: t .deref columns? { "Station Name" :Name "Year"}
 title-data: t .deref |group-by { "Station Name" } { 'Year min 'Year max }
-title-name: ( title-data .column? "Station Name" ) .to-string .capitalize .replace " " ""  ; column? adds a space to the end of the data
+title-name: ( title-data .column? "Station Name" ) .to-string .capitalize .trim ; column? adds a space to the end of the data
 year-min:: ( title-data .column? 'Year_min ) .to-string .split "." |first ; column? shows the number as a decimal value
 year-max:: ( title-data .column? 'Year_max ) .to-string .split "." |first ; so I split it out. I don't know why to-integer didn't work
 
@@ -114,7 +114,7 @@ filter: either group = "Month" {
 
 ; create the chart title
 title: join [
-    title-name ": "
+    "Heating Costs for " title-name ": "
     ; include either the start-end years or just the selected year
     ( either filter = "All" { join [ year-min "-" year-max ] } { filter } )
     ; "       007"   ; not every change is visible, so I update this while testing. I'll get rid of it when I'm finished
@@ -188,10 +188,9 @@ x-series: join [ alt-data newline primary-data newline primary-only-data ]
 chart-spec:: chart/x-axis-data chart-spec join [ alt-data newline primary-data newline primary-only-data ]
 
 ; Now I need to build the table section, starting with the table's header row
-; I'm looking at this and cringing. surely there is a better way, but I've got it working, so I'm leaving it for now.
 table-head: table to-block header? table-data to-block header? table-data |htmlize 
     |replace "{" "" |replace "}" ""
-    |replace alt-column ++ "_sum" alt-title
+    |replace alt-column ++ "_sum" alt-title         ; replaces raw column names with appropriate titles for a nicer display
     |replace primary-column ++ "_sum" primary-title
     |replace primary-only-column ++ "_sum" primary-only-title
     |replace "<table>" "<thead>" |replace "</table>" join [ "</thead>" newline "<tbody>" ]
@@ -207,7 +206,7 @@ table-body: ( htmlize table-data |replace "{" "" |replace "}" "" )
 chart-spec:: chart/insert-table chart-spec table-body
 
 ; build the file name based on the chart title, write it out, and open it
-chart-file:: to-uri join [ title .replace ": " "_" "_by" group ".html" ]
+chart-file:: join [ title .replace ": " "_" "_by" group ".html" ] |replace "Heating Costs for" "" |replace " " "" |to-uri
 Write chart-file chart/chart-html chart-base chart-spec
 chart-file:: to-uri join [ work-dir .to-string "/" to-string chart-file ]
 cmd { open ?chart-file } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
