@@ -36,6 +36,7 @@ The basic flow is:
     * If creating a new file, `get-station-data.rye` will be executed to do that
     * You will create/refresh the Station List
     * Create/refresh the Station Data
+       * You will be asked to enter a station name. The system will search for partial matches. Leaving it blank will return all weather stations.
     * CSV files will be created for use by the main program (`heat-cost.rye`), but you have the option of also generating XLSX files for use with Excel or other spreadsheet programs. Note that most spreadsheet and database programs can use CSV files directly.
 * Having chosen a file you will be asked what kind of grouping you want.
     * If you choose Year, the chart and associated table will show annual totals
