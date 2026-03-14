@@ -6,7 +6,7 @@ title-text: fn { spec title } {
 }
 
 y-axis-text: fn { spec y-text } {
-    replace spec "var yData = ['A', 'B', 'C', 'D', 'E'];" join [ "var yData = [" ( y-text .to-string .replace " " ", " ) "];" ]
+    replace spec "var yData = ['A', 'B', 'C', 'D', 'E'];" join [ "var yData = [" ( y-text .string .replace " " ", " ) "];" ]
 }
 
 x-axis-data: fn { spec x-data } {

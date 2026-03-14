@@ -41,10 +41,22 @@ if refresh {
 
         for rest\from source 4 { ::row newline ++ row |Write* destination }	
     }
+
+    u/gap 1
+    print replace join [ os/cwd? .string "/" string stations-filename " is ready to use." ] "%" ""
+    print "Most spreadsheet and database programs have the ability to import .CSV files as tables."
+
+    u/gap 3
+    print "XLSX files are a native Excel format, but are more portable to other applications than plain XLS files."
+    print "Do you want this as an XLSX file, too?"
+
+    if ( flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] ) = "Yes" {
+        xlsx-file: uri join [ stations-filename .Stem? ".xlsx" ]
+        Load\csv stations-filename |Save\xlsx* xlsx-file
+        u/gap 1
+        print replace join [ os/cwd? .string "/" string xlsx-file " is ready to use." ] "%" ""
+    }
 }
 
-u/gap 1
-print join [ os/cwd? .to-string "/" to-string stations-filename " is ready to use." ]
-print "Most spreadsheet and database programs have the ability to import .CSV files as tables."
 u/gap 1
 

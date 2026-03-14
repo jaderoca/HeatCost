@@ -14,7 +14,7 @@ work-dir: os/cwd?   ; I need the working directory in a few different places
 config-file: %heat-source.cfg
 if not ( config-file .Does-exist ) {
     config-file |Write join [ "Heat Source,Daily Cost,Min Effective Temp (°C)" newline
-        "No Heat,0.00,10" newline
+        "No Heat,0.00,15" newline
         "Pellet Stove,7.00,-50" newline
         "Heat Pump,2.00,-5"
     ]
@@ -49,13 +49,13 @@ nth config-table 1 |nth 3 :threshold ; we don't need any heat until the daily av
 
 ; the second row of the sorted config file is for the alternate heat source
 ; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature, hence "pivot"
-nth config-table 2 |to-block |match-block { alt-title alt-cost pivot }
+nth config-table 2 |block |match-block { alt-title alt-cost pivot }
 alt-column: alt-title .replace " " "" ; this will be a column name and column names with spaces are a pain
 
 ; the third row of the sorted config file is for the primary heat source
 ; we switch from the alternate heat source to the primary heat source at the alternate's minimum effective temperature
 ; we don't actually need the primary heat's minimum effective temperature, but "match-block" is so elegant!
-nth config-table 3 |to-block |match-block { primary-title primary-cost primary-min-temp }
+nth config-table 3 |block |match-block { primary-title primary-cost primary-min-temp }
 primary-column: primary-title .replace " " "" ; this will be a column name and column names with spaces are a pain
 
 ; we need a title and column for the column that will show us the cost without the alternate heat source
@@ -65,7 +65,7 @@ primary-only-column: primary-only-title .replace " " ""
 ; List the available sets of data and load the one selected
 ; Start by checking to see if there are any data sets at all
 file-picker:: ""
-if ( to-string os/ls\ "_Daily.csv" ) = "" {
+if ( string os/ls\ "_Daily.csv" ) = "" {
     file-picker:: "New!"
 }
 
@@ -73,21 +73,22 @@ until { not file-picker = "New!" } {
     if file-picker = "New!" { private { do Load %get-station-data.rye } } ; the anonymous context is to avoid name collisions
     u/gap 3
     print "Choose which file to analyze:"
-    file-picker:: display split trim join [ "New! " to-string os/ls\ "_Daily.csv" ] " "    
+    ; Rye v0.2.3 changed the way uris get converted to strings, so now we need to explicitly remove the %
+    file-picker:: display split trim join [ "New! " replace string os/ls\ "_Daily.csv" "%" "" ] " " 
 }
 
 ; I need to tinker with columns and their values, so load as ref
-t: to-uri file-picker |Load\csv .ref
+t: uri file-picker |Load\csv .ref
 
 
 ; I have to do a bunch of work with the data to set up for the next set of questions
 
 ; coerce temperature data to decimal so we can perform calculations with it
 ; why not just use autotype? Because autotype turns 0-padded numbers into integers, screwing up order-by for months and days
-t .update-column! "Min Temp (°C)" fn { c r } { c .to-string .to-decimal }
-t .update-column! "Max Temp (°C)" fn { c r } { c .to-decimal }
-t .update-column! "Mean Temp (°C)" fn { c r } { c .to-decimal }
-t .update-column! "Year" fn { c r } { c .to-integer }
+t .update-column! "Min Temp (°C)" fn { c r } { c .string .decimal }
+t .update-column! "Max Temp (°C)" fn { c r } { c .decimal }
+t .update-column! "Mean Temp (°C)" fn { c r } { c .decimal }
+t .update-column! "Year" fn { c r } { c .integer }
 
 
 ; turn the data into something I can use to create the chart title
@@ -95,9 +96,9 @@ t .update-column! "Year" fn { c r } { c .to-integer }
 ; this also makes it easier to ask the user which year they want to analyze
 ; t-data: t .deref columns? { "Station Name" :Name "Year"}
 title-data: t .deref |group-by { "Station Name" } { 'Year min 'Year max }
-title-name: ( title-data .column? "Station Name" ) .to-string .capitalize .trim ; column? adds a space to the end of the data
-year-min:: ( title-data .column? 'Year_min ) .to-string .split "." |first ; column? shows the number as a decimal value
-year-max:: ( title-data .column? 'Year_max ) .to-string .split "." |first ; so I split it out. I don't know why to-integer didn't work
+title-name: ( title-data .column? "Station Name" ) .string .capitalize .trim ; column? adds a space to the end of the data
+year-min:: ( title-data .column? 'Year_min ) .string .split "." |first ; column? shows the number as a decimal value
+year-max:: ( title-data .column? 'Year_max ) .string .split "." |first ; so I split it out. I don't know why integer didn't work
 
 ; okay, things are ready to go!
 u/gap 3
@@ -106,7 +107,7 @@ group: display { "Year" "Month" }
 
 u/gap 3
 filter: either group = "Month" {
-     display split join [ "All " to-string range year-min .to-integer year-max .to-integer ] " "
+     display split join [ "All " string range year-min .integer year-max .integer ] " "
 }
 {
     "All"
@@ -125,20 +126,20 @@ title: join [
 ; I tried to use an either statement for the where-equal clause and couldn't get it to work, so just hacked this together
 data: either filter = "All" { t .deref
     |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
-    |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
-    |gen-column to-word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .to-decimal } }
-    |gen-column to-word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .to-decimal } }
-    |gen-column to-word primary-only-column { } { primary-cost }
+    |gen-column 'Year-Month { Year Month } { join [ Year .string "-" Month ] }
+    |gen-column word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .decimal } }
+    |gen-column word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .decimal } }
+    |gen-column word primary-only-column { } { primary-cost }
     |where-lesser 'MeanTemp threshold
 }
 { t .deref
     |columns? { "Station Name" :Name "Year" "Month" "Min Temp (°C)" :MinTemp "Max Temp (°C)" :MaxTemp "Mean Temp (°C)" :MeanTemp }
-    |gen-column 'Year-Month { Year Month } { join [ Year .to-string "-" Month ] }
-    |gen-column to-word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .to-decimal } }
-    |gen-column to-word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .to-decimal } }
-    |gen-column to-word primary-only-column { } { primary-cost }
+    |gen-column 'Year-Month { Year Month } { join [ Year .string "-" Month ] }
+    |gen-column word alt-column { MinTemp } { :v either v >= pivot { alt-cost } { "0" .decimal } }
+    |gen-column word primary-column { MinTemp } { :v either v < pivot { primary-cost } { "0" .decimal } }
+    |gen-column word primary-only-column { } { primary-cost }
     |where-lesser 'MeanTemp threshold
-    |where-equal 'Year to-integer filter
+    |where-equal 'Year integer filter
 }
 
 
@@ -170,17 +171,17 @@ chart-spec:: chart/y-axis-text chart-spec ( chart-data .column? group ) ; the pa
 
 ; I may eventually figure out how to generalize this, but just sticking with what I know I need for my own purposes works for now
 alt-data:: join [ "{ name: '" alt-title " Cost', type: 'bar', stack: 'x'," newline "data: [" ]
-for chart-data .column? join [ alt-column "_sum" ] { ::c alt-data:: join [ alt-data  ( c .to-string |split "." |first ) ", " ] }
+for chart-data .column? join [ alt-column "_sum" ] { ::c alt-data:: join [ alt-data  ( c .string |split "." |first ) ", " ] }
 alt-data:: join [ alt-data "]" newline "}," ]
 
 primary-data:: join [ "{ name: '" primary-title " Cost', type: 'bar', stack: 'x'," newline "data: [" ]
-for chart-data .column? join [ primary-column "_sum" ] { ::c primary-data:: join [ primary-data  ( c .to-string |split "." |first ) ", " ] }
+for chart-data .column? join [ primary-column "_sum" ] { ::c primary-data:: join [ primary-data  ( c .string |split "." |first ) ", " ] }
 primary-data:: join [ primary-data "]" newline "}," ]
 
 ; the charting software allows for stacked and unstacked bars on the same chart
 ; that's a nice way to show the comparison of mixed heat sources to a single heat source
 primary-only-data:: join [ "{ name: '" primary-only-title " Cost', type: 'bar'," newline "data: [" ]
-for chart-data .column? join [ primary-only-column "_sum" ] { ::c primary-only-data:: join [ primary-only-data  ( c .to-string |split "." |first ) ", " ] }
+for chart-data .column? join [ primary-only-column "_sum" ] { ::c primary-only-data:: join [ primary-only-data  ( c .string |split "." |first ) ", " ] }
 primary-only-data:: join [ primary-only-data "]" newline "}," ]
 
 ; this finishes the chart section of the web page I'm building
@@ -188,7 +189,7 @@ x-series: join [ alt-data newline primary-data newline primary-only-data ]
 chart-spec:: chart/x-axis-data chart-spec join [ alt-data newline primary-data newline primary-only-data ]
 
 ; Now I need to build the table section, starting with the table's header row
-table-head: table to-block header? table-data to-block header? table-data |htmlize 
+table-head: table block header? table-data block header? table-data |htmlize 
     |replace "{" "" |replace "}" ""
     |replace alt-column ++ "_sum" alt-title         ; replaces raw column names with appropriate titles for a nicer display
     |replace primary-column ++ "_sum" primary-title
@@ -206,12 +207,12 @@ table-body: ( htmlize table-data |replace "{" "" |replace "}" "" )
 chart-spec:: chart/insert-table chart-spec table-body
 
 ; build the file name based on the chart title, write it out, and open it
-chart-file:: join [ title .replace ": " "_" "_by" group ".html" ] |replace "Heating Costs for" "" |replace " " "" |to-uri
+chart-file:: join [ title .replace ": " "_" "_by" group ".html" ] |replace "Heating Costs for" "" |replace " " "" |uri
 Write chart-file chart/chart-html chart-base chart-spec
-chart-file:: to-uri join [ work-dir .to-string "/" to-string chart-file ]
+chart-file:: uri replace join [ work-dir .string "/" string chart-file ] "%" ""
 cmd { open ?chart-file } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
 
 ; remind the user that a file has been created and where to find it.
 u/gap 3
-print join [ to-string chart-file " is ready to view!" ]
+print join [ trim\ string chart-file "%" " is ready to view!" ]
 u/gap 3
