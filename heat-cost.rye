@@ -1,4 +1,4 @@
-; Rye version 0.0.
+; Rye version 0.2.3
 
 ; Just a quick note on progress indicators:
 ; Everything that takes time is found in the sub-programs I Load
@@ -22,10 +22,21 @@ if not ( config-file .Does-exist ) {
     u/gap 3
     print join [ "Created sample configuration file." newline 
         "Edit " work-dir "/" config-file " to set your own heat source characteristics." ]
-    if ( flui/select dict [ "Continue" "Use the sample configuration." "Edit" "Make my own configuration." ] ) = "Edit" {
+    u/gap 1    
+    if ( try { flui/select dict [ "Continue" "Use the sample configuration." "Edit" "Make my own configuration." ] }
+        |fix { exit "" } ) = "Edit"
+    {
         u/gap 1
-        cmd { open ?work-dir } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.        
-        exit "Restart the program after saving your changes."
+        try { 
+            cmd { open ?work-dir } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
+        }
+        |fix {
+           print "Something went wrong while trying to open the configuration file for editing!"
+           print "Sorry, you'll have to take care of this on your own..."
+        }
+        print "Restart the program after saving your changes."
+        u/gap 1
+        exit ""
     }
 
 }
@@ -34,7 +45,7 @@ config-table: Load\csv config-file |autotype 0.99 |order-by "Min Effective Temp 
 
 if not ( config-table .length? = 3 ) {
     u/gap 1
-    print join [ "Invalid configuration file! There must be exactly 3 rows." newline
+    print join [ "Invalid configuration file! There must be exactly 3 rows after the header row." newline
         "One row for the No Heat Required condition that shows a 0.00 operating cost and the daily average temperature at which you no longer require heat." newline
         "One row for the Primary Heat method that can be used regardless of outdoor temperatures. This should have a non-zero operating cost and a very low temperature." newline
         "One row for the Alternate Heat Method that has outdoor temperature limitations, but is less expensive to operate than the Primary Method." newline
@@ -74,7 +85,11 @@ until { not file-picker = "New!" } {
     u/gap 3
     print "Choose which file to analyze:"
     ; Rye v0.2.3 changed the way uris get converted to strings, so now we need to explicitly remove the %
-    file-picker:: display split trim join [ "New! " replace string os/ls\ "_Daily.csv" "%" "" ] " " 
+    try {
+        file-picker:: display split trim join [ "New! " replace string os/ls\ "_Daily.csv" "%" "" ] " " 
+    } |fix { 
+        exit "No file selected!"
+    }
 }
 
 ; I need to tinker with columns and their values, so load as ref
@@ -105,12 +120,20 @@ u/gap 3
 print "Choose how you want the data grouped:"
 group: display { "Year" "Month" }
 
+if ( group .type? .mold = "block" ) {
+    exit "No grouping selected!"
+}
+
 u/gap 3
 filter: either group = "Month" {
-     display split join [ "All " string range year-min .integer year-max .integer ] " "
+    display split join [ "All " string range year-min .integer year-max .integer ] " "
 }
 {
     "All"
+}
+
+if filter .type? .mold = "block" {
+    exit "No group type selected!"
 }
 
 ; create the chart title
@@ -210,6 +233,8 @@ chart-spec:: chart/insert-table chart-spec table-body
 chart-file:: join [ title .replace ": " "_" "_by" group ".html" ] |replace "Heating Costs for" "" |replace " " "" |uri
 Write chart-file chart/chart-html chart-base chart-spec
 chart-file:: uri replace join [ work-dir .string "/" string chart-file ] "%" ""
+
+
 cmd { open ?chart-file } |Run ; does not work within VSCodes terminal window, but works fine when the program is run from the command line.
 
 ; remind the user that a file has been created and where to find it.
