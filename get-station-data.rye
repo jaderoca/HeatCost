@@ -39,7 +39,7 @@ station-row: display station-list
 
 ; No point continuing if the user didn't select a station
 if not ( station-row .type? .string = "tablerowtype" ) {
-    exit "\n No station selected!"
+    exit "No station selected!"
 }
 
 file-name: station-row -> "Name" |replace " " "_"
@@ -61,7 +61,7 @@ first: display year-list
 
 ; No point continuing if the user did not choose a year
 if not ( first .type? .string = "integer" ) {
-    exit "\n No year selected!"
+    exit "No year selected!"
 }
 
 u/gap 3
@@ -71,7 +71,7 @@ last: display reverse year-list ; reverse the list to put most recent years at t
 
 ; No point continuing if the user did not choose a year
 if not ( last .type? .string = "integer" ) {
-    exit "\n No year selected!" 
+    exit "No year selected!" 
 }
 
 ; define the file name based on user selections, then go get the requested data
@@ -82,14 +82,14 @@ refresh:: true
 if station-file .Does-exist {
      u/gap 3
      print "The data file for this station already exists. Do you want to refresh it?"
-    refresh:: ( flui/select dict [ "No" "Do not refresh the data for this station." "Yes" "Refresh the data for this station." ] ) = "Yes"
+    refresh:: ( try { flui/select dict [ "No" "Do not refresh the data for this station." "Yes" "Refresh the data for this station." ] } |fix { exit "Cancelled by user!" } ) = "Yes"
 }
 
 if refresh {
     ; I don't know if using files to help with processing is sensible, but it's a LOT simpler than what I was doing before.
     u/gap 1
     term/spin-it "Getting station data." {
-        Get uri [ station-id first ] .format daily-source |replace "\"" "" |Write* station-file
+        try { Get uri [ station-id first ] .format daily-source } |fix { exit "Station Data not found! Check network connection." } |replace "\"" "" |Write* station-file
         station-table:: Load\csv station-file ; mod word because it seems like the easiest way to keep the table updated
             ; generally, if there is no temperature data then there is no other data
             ; if there is, it's no great loss because there aren't really that many rows without temperature data
@@ -98,7 +98,7 @@ if refresh {
             |where-not-equal "Max Temp (°C)" ""
         for range  inc first last {
             ::year
-            Get uri [ station-id year ] .format daily-source |replace "\"" "" |Write* station-file
+            try { Get uri [ station-id year ] .format daily-source } |fix { exit "Station Data not found! Check network connection." } |replace "\"" "" |Write* station-file
             temp-table:: Load\csv station-file ; I used to use a temp file, but realized that I can just reuse the main one
                 |where-not-equal "Min Temp (°C)" ""
                 |where-not-equal "Max Temp (°C)" ""
@@ -114,7 +114,7 @@ if refresh {
     print "XLSX files are a native Excel format, but are more portable to other applications than plain XLS files."
     print "Do you want this as an XLSX file, too?"
 
-    if ( flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] ) = "Yes" {
+    if ( try { flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] } |fix { exit "Cancelled by user!" } ) = "Yes" {
         xlsx-file: uri join [ station-file .Stem? ".xlsx" ]
         Load\csv station-file |Save\xlsx* xlsx-file
         u/gap 1

@@ -20,7 +20,7 @@ refresh:: true
 if stations-filename .Does-exist {
     u/gap 1
     print "The station list already exists. Do you want to refresh it?"
-    refresh:: ( flui/select dict [ "No" "Do not refresh the list of stations." "Yes" "Refresh the list of stations." ] ) = "Yes"
+    refresh:: ( try { flui/select dict [ "No" "Do not refresh the list of stations." "Yes" "Refresh the list of stations." ] } |fix { exit "Cancelled by User!" } ) = "Yes"
 }
 
 if refresh {
@@ -30,7 +30,7 @@ if refresh {
         ; I do this convoluted process because Environment Canada's file includes notes at the top that interfere with reading the data
         
         ; download the list into a block with each line as a separate element
-        source: Get stations-source |split newline
+        source: try { Get stations-source } |fix { exit "Station List not found! Check network connection." } |split newline
 
         ; Write the header row (writing like this will create or overwrite the file)
             Write stations-filename ( first rest\from source 3 )
@@ -50,7 +50,7 @@ if refresh {
     print "XLSX files are a native Excel format, but are more portable to other applications than plain XLS files."
     print "Do you want this as an XLSX file, too?"
 
-    if ( flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] ) = "Yes" {
+    if ( try { flui/select dict [ "Yes" "Give me an XLSX file, too." "No" "Do not give me an XLSX file." ] } |fix { exit "Cancelled by user!" } ) = "Yes" {
         xlsx-file: uri join [ stations-filename .Stem? ".xlsx" ]
         Load\csv stations-filename |Save\xlsx* xlsx-file
         u/gap 1
