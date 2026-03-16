@@ -42,11 +42,11 @@ The basic flow is:
     * If you choose Year, the chart and associated table will show annual totals
     * If you choose Month, you will also be asked to choose whether to show the totals for each month across all years or each month for a given year.
 * That's it! It will generate an HTML file based on the file name being processed and attempt to open it in your browser. If it fails to open, just browse to the displayed file storage location and open it manually. You can copy the HTML file to a web server if you want, but that's out of scope for this project.
+* You can press `ESC` (or `CTRL-C` in some cases) to cancel and exit the program at any time during an input request. (Previously caused program to crash.)
 
 Yet to come:
 * Migrate and test with whatever version of Rye is available whenever I work on it.
 * There are some things that I think could be done better, so I'll probably pick away at them over time.
-* More error avoidance and maybe even some actual error handling
 * Try out some of the UI stuff in Rye:
     * There is a way to use (Fyne)[https://fyne.io/] for a true Graphical User Interface and the developer is working other GUI libraries.
     * Some Terminal User Interface features have been added to more recent versions of Rye
