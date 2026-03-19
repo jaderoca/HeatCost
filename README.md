@@ -1,4 +1,4 @@
-Tested on Linux (Ubuntu 20.04) with [Rye](https://github.com/refaktor/rye) version 0.2.3
+Tested on Linux (Ubuntu 20.04) with [Rye](https://github.com/refaktor/rye) version 0.2.4 (no changes required, so new release was unnecessary)
 
 This project duplicates the work I did manually and with the help of spreadsheets to help me figure out whether it was a good idea to install a heat pump to do the easy work, leaving our pellet stove to do the hard work. I determined that it was a good idea and performance actually exceeded my expectations.
 
